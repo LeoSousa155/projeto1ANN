@@ -73,20 +73,36 @@ summary(data)
 
 
 
-%% 3) Exploratory Data Analysis (PCA)
-% Visualização dos histogramas de todas as features (EDA)
-figure
+%% 3) Exploratory Data Analysis
+% Visualização dos histogramas (EDA)
+% Separamos o Volume para visualizar a sua distribuição com escala logarítmica
 vars = data.Properties.VariableNames;
-nVars = length(vars);
-% Criar uma grelha dinâmica baseada no número de variáveis
-nRows = ceil(nVars/3);
-for i = 1:nVars
+vars_no_volume = vars(~strcmp(vars, 'Volume'));
+nVarsNoVol = length(vars_no_volume);
+
+figure
+nRows = ceil(nVarsNoVol/3);
+for i = 1:nVarsNoVol
     subplot(nRows, 3, i);
-    histogram(data{:, vars{i}});
-    title(['Distribuição de ', vars{i}]);
+    histogram(data{:, vars_no_volume{i}});
+    title(['Distribuição de ', vars_no_volume{i}]);
     grid on;
 end
-sgtitle('Histogramas de todas as Features Iniciais');
+sgtitle('Histogramas das Features (Escala Linear)');
+
+% Gráfico do Volume com escala Logarítmica para melhor visualização da distribuição
+figure;
+subplot(1, 2, 1);
+histogram(data.Volume);
+title('Distribuição de Volume (Linar)');
+grid on;
+
+subplot(1, 2, 2);
+histogram(data.Volume);
+set(gca, 'XScale', 'log');
+title('Distribuição de Volume (Logarítmica)');
+grid on;
+sgtitle('Análise Detalhada da Feature Volume');
 
 % gráficos de dispersão das features vs Close
 figure
@@ -115,8 +131,9 @@ title('Sales e Weight');
 % Boxplot para Volume (escala muito superior)
 subplot(1, 4, 4);
 boxplot(data.Volume);
+set(gca, 'YScale', 'log'); % Escala logarítmica para visualizar melhor a distribuição e outliers
 xticklabels({'Volume'});
-title('Volume');
+title('Volume (Escala Log)');
 
 
 % Matriz de correlação entre as features
@@ -125,34 +142,6 @@ figure;
 heatmap(data.Properties.VariableNames, data.Properties.VariableNames, corr_matrix);
 title('Matriz de Correlação');
 
-% Executamos o PCA aqui para ver a estrutura inicial dos dados e identificar outliers.
-% Nota: Nesta fase, como os dados ainda não foram normalizados, as variáveis com 
-% escalas maiores (ex: Volume) tendem a dominar as componentes principais.
-
-% Selecionar apenas as colunas numéricas disponíveis após a limpeza
-currentNumericVars = data.Properties.VariableNames(varfun(@isnumeric, data, 'OutputFormat', 'uniform'));
-numericData = table2array(data(:, currentNumericVars));
-[coeff_init, score_init, ~, ~, explained_init, ~] = pca(numericData);
-
-figure;
-subplot(1, 2, 1);
-pareto(explained_init);
-xlabel('Componente Principal');
-ylabel('Variância (%)');
-title('Scree Plot Inicial');
-
-subplot(1, 2, 2);
-scatter(score_init(:,1), score_init(:,2), 15, data.Close, 'filled');
-cb = colorbar;
-cb.Label.String = 'Preço (Close)';
-xlabel(['PC1 (', num2str(explained_init(1), '%.1f'), '%)']);
-ylabel(['PC2 (', num2str(explained_init(2), '%.1f'), '%)']);
-title('Projeção PCA Inicial (Dados Limpos)');
-grid on;
-
-figure;
-biplot(coeff_init(:,1:2), 'Scores', score_init(:,1:2), 'VarLabels', currentNumericVars);
-title('Biplot Inicial: Estrutura Natural das Features');
 
 
 
@@ -299,5 +288,35 @@ set(gca, 'xticklabel', [orig_vars, eng_vars], 'XTickLabelRotation', 45);
 ylabel('Correlação Absoluta com o Target (Close)');
 title('Comparação da Utilidade das Features');
 grid on;
+
+
+%% 8) PCA Final (Análise pós-tratamento)
+% Executamos o PCA agora com os dados transformados e normalizados para ver
+% a estrutura final que será alimentada aos modelos.
+
+% Selecionar colunas numéricas do conjunto de treino (já processado)
+numericVarsFinal = train_data.Properties.VariableNames(varfun(@isnumeric, train_data, 'OutputFormat', 'uniform'));
+numericDataFinal = table2array(train_data(:, numericVarsFinal));
+[coeff_final, score_final, ~, ~, explained_final, ~] = pca(numericDataFinal);
+
+figure;
+subplot(1, 2, 1);
+pareto(explained_final);
+xlabel('Componente Principal');
+ylabel('Variância (%)');
+title('Scree Plot Final (Pós-Tratamento)');
+
+subplot(1, 2, 2);
+scatter(score_final(:,1), score_final(:,2), 15, train_data.Close, 'filled');
+cb = colorbar;
+cb.Label.String = 'Preço Close (Normalizado)';
+xlabel(['PC1 (', num2str(explained_final(1), '%.1f'), '%)']);
+ylabel(['PC2 (', num2str(explained_final(2), '%.1f'), '%)']);
+title('Projeção PCA Final (Dados Tratados)');
+grid on;
+
+figure;
+biplot(coeff_final(:,1:2), 'Scores', score_final(:,1:2), 'VarLabels', numericVarsFinal);
+title('Biplot Final: Estrutura das Features Processadas');
 
 disp('Processamento Completo. O dataset está pronto para modelação preditiva.');
