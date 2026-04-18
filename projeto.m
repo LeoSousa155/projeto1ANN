@@ -26,8 +26,18 @@ end
 disp('Contagem de valores iguais a zero:');
 disp(array2table(zeros_count, 'VariableNames', data.Properties.VariableNames));
 
-disp('Sumário estatístico inicial:');
+disp('Sumário estatístico inicial (describe):');
 summary(data)
+
+fprintf('\n--- Visualização do Cabeçalho (head) ---\n');
+head(data, 8)
+
+fprintf('\n--- Informação do Dataset (info) ---\n');
+% Criar uma tabela informativa semelhante ao .info() do pandas
+info_table = table(data.Properties.VariableNames', varfun(@class, data, 'OutputFormat', 'cell')', ...
+    varfun(@(x) sum(~ismissing(x)), data, 'OutputFormat', 'uniform')', ...
+    'VariableNames', {'Feature', 'Type', 'Non_Null_Count'});
+disp(info_table);
 
 %% 2) Data Cleaning
 if ismember('Date', data.Properties.VariableNames)
@@ -185,10 +195,16 @@ end
 sgtitle('Impacto da Transformação Logarítmica - Restantes Features');
 
 %% 6) Feature Selection
-selected_features = {'Open', 'Volume', 'Sales', 'weight', 'HL_Range', 'Sales_per_Weight'};
+selected_features = {'Open', 'Volume', 'Sales', 'weight', 'HL_Range'};
 fprintf('\n--- Feature Selection ---\nFeatures Retidas: '); disp(selected_features);
 
-figure; heatmap([selected_features, {'Close'}], [selected_features, {'Close'}], corr(table2array(train_data(:, [selected_features, {'Close'}]))));
+figure; 
+% Incluímos as features descartadas no gráfico para justificar a redundância
+heatmap_vars = [selected_features, {'Daily_Mean', 'Sales_per_Weight', 'Close'}];
+h2 = heatmap(heatmap_vars, heatmap_vars, corr(table2array(train_data(:, heatmap_vars))));
+h2.Title = 'Matriz de Correlação: Análise de Redundância (Seleção + Descartadas)';
+h2.XDisplayLabels = strrep(h2.XDisplayLabels, '_', '\_');
+h2.YDisplayLabels = strrep(h2.YDisplayLabels, '_', '\_');
 
 %% 7) Análise Comparativa e Justificação de Seleção
 % Avaliação da utilidade estatística de todas as features para a Rede
@@ -209,7 +225,7 @@ b1 = bar(find(is_selected_logic), all_corr_vals(is_selected_logic), 'FaceColor',
 b2 = bar(find(~is_selected_logic), all_corr_vals(~is_selected_logic), 'FaceColor', [0.8500 0.3250 0.0980]);
 
 xlim([0 length(all_corr_names)+1]);
-set(gca, 'xtick', 1:length(all_corr_names), 'xticklabel', all_corr_names, 'XTickLabelRotation', 45);
+set(gca, 'xtick', 1:length(all_corr_names), 'xticklabel', all_corr_names, 'XTickLabelRotation', 45, 'TickLabelInterpreter', 'none');
 ylabel('Correlação Absoluta (Afinidade c/ o Preço Close)'); 
 title('Comparativo de Feature Selection: Selecionadas vs Descartadas');
 legend([b1(1), b2(1)], {'Retidas para a Rede', 'Descartadas (Alta Multicolinearidade)'}, 'Location', 'northeast');
@@ -227,7 +243,10 @@ subplot(1, 2, 2);
 scatter(score_final(:,1), score_final(:,2), 15, train_data.Close, 'filled');
 colorbar; title('Projeção PCA Final'); xlabel(sprintf('PC1 (%.1f%%)', explained_final(1))); ylabel(sprintf('PC2 (%.1f%%)', explained_final(2))); grid on;
 
-figure; biplot(coeff_final(:,1:2), 'Scores', score_final(:,1:2), 'VarLabels', selected_features); title('Biplot PCA (Projeção das Variáveis Retidas)');
+figure; 
+biplot(coeff_final(:,1:2), 'Scores', score_final(:,1:2), 'VarLabels', selected_features); 
+title('Biplot PCA (Projeção das Variáveis Retidas)');
+set(findobj(gca, 'Type', 'text'), 'Interpreter', 'none');
 
 %% 9) Distribuições Finais e Exportação Física
 final_cols = [selected_features, {'Close'}];
